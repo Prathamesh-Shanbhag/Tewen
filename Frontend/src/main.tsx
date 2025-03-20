@@ -1,10 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
+import { BrowserRouter } from 'react-router-dom'
+import { ThemeProvider } from '@/components/theme-provider'
 import App from './App.tsx'
+import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
-  </StrictMode>,
+    <BrowserRouter>
+      <ThemeProvider defaultTheme='system' storageKey='tewen-theme'>
+        <App />
+      </ThemeProvider>
+    </BrowserRouter>
+  </StrictMode>
 )
