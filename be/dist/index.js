@@ -14,6 +14,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require('dotenv').config();
 const express_1 = __importDefault(require("express"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const prompts_1 = require("./prompts");
 const react_1 = require("./defaults/react");
@@ -26,6 +28,16 @@ const anthropic = new sdk_1.default();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Create a public directory for deployments if it doesn't exist
+const deploymentDir = path_1.default.join(__dirname, '../deployments');
+if (!fs_1.default.existsSync(deploymentDir)) {
+    fs_1.default.mkdirSync(deploymentDir, { recursive: true });
+}
+// Create a public directory for hosting if it doesn't exist
+const publicDir = path_1.default.join(__dirname, '../public');
+if (!fs_1.default.existsSync(publicDir)) {
+    fs_1.default.mkdirSync(publicDir, { recursive: true });
+}
 app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const prompt = req.body.prompt;
     const response = yield anthropic.messages.create({
@@ -67,6 +79,7 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         system: (0, prompts_1.getSystemPrompt)(),
     });
     console.log(response);
+    // Redundacy Function for backend extraction in case front-end extraction fails.
     // Extract the raw text from the response
     const rawText = ((_a = response.content[0]) === null || _a === void 0 ? void 0 : _a.text) || '';
     // Extract the title from the response using regex
@@ -84,10 +97,141 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         description: description,
     };
     res.json({
-        // response: rawText,
+        response: rawText,
         formattedResponse: formattedResponse,
     });
 }));
+app.post('/deploy', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { files, projectTitle } = req.body;
+        if (!files || !Array.isArray(files) || !projectTitle) {
+            return res.status(400).json({
+                error: 'Invalid request. Files array and project title are required.',
+            });
+        }
+        // Sanitize the project title to make it safe for file system
+        const sanitizedTitle = projectTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        // Create the project directory
+        const projectDir = path_1.default.join(deploymentDir, sanitizedTitle);
+        const publicProjectDir = path_1.default.join(publicDir, sanitizedTitle);
+        // Remove the directory if it already exists
+        if (fs_1.default.existsSync(projectDir)) {
+            fs_1.default.rmdirSync(projectDir, { recursive: true });
+        }
+        if (fs_1.default.existsSync(publicProjectDir)) {
+            fs_1.default.rmdirSync(publicProjectDir, { recursive: true });
+        }
+        // Create the project directory
+        fs_1.default.mkdirSync(projectDir, { recursive: true });
+        fs_1.default.mkdirSync(publicProjectDir, { recursive: true });
+        // Function to recursively create files and directories
+        const createFilesRecursively = (items, baseDir, publicBaseDir) => {
+            items.forEach((item) => {
+                if (item.type === 'folder') {
+                    // Create folder
+                    const folderPath = path_1.default.join(baseDir, item.name);
+                    const publicFolderPath = path_1.default.join(publicBaseDir, item.name);
+                    if (!fs_1.default.existsSync(folderPath)) {
+                        fs_1.default.mkdirSync(folderPath, { recursive: true });
+                    }
+                    if (!fs_1.default.existsSync(publicFolderPath)) {
+                        fs_1.default.mkdirSync(publicFolderPath, { recursive: true });
+                    }
+                    // Recursively create children
+                    if (item.children && Array.isArray(item.children)) {
+                        createFilesRecursively(item.children, folderPath, publicFolderPath);
+                    }
+                }
+                else if (item.type === 'file') {
+                    // Create file
+                    const filePath = path_1.default.join(baseDir, item.name);
+                    const publicFilePath = path_1.default.join(publicBaseDir, item.name);
+                    fs_1.default.writeFileSync(filePath, item.content || '');
+                    fs_1.default.writeFileSync(publicFilePath, item.content || '');
+                }
+            });
+        };
+        // Create files and directories
+        createFilesRecursively(files, projectDir, publicProjectDir);
+        // Save metadata about the deployment
+        const metadata = {
+            projectTitle,
+            deploymentDate: new Date().toISOString(),
+            fileCount: files.length,
+        };
+        fs_1.default.writeFileSync(path_1.default.join(projectDir, 'metadata.json'), JSON.stringify(metadata, null, 2));
+        // Create a simple index.html that redirects to the actual index if it doesn't exist
+        const indexPath = path_1.default.join(publicProjectDir, 'index.html');
+        if (!fs_1.default.existsSync(indexPath)) {
+            // Look for an index file in any subfolder
+            let foundIndex = false;
+            const findIndexFile = (dir) => {
+                const items = fs_1.default.readdirSync(dir, { withFileTypes: true });
+                for (const item of items) {
+                    const itemPath = path_1.default.join(dir, item.name);
+                    if (item.isDirectory()) {
+                        if (findIndexFile(itemPath)) {
+                            foundIndex = true;
+                            return true;
+                        }
+                    }
+                    else if (item.name === 'index.html') {
+                        // Create a redirect in the root
+                        const relativePath = path_1.default.relative(publicProjectDir, itemPath);
+                        fs_1.default.writeFileSync(indexPath, `<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="0;url=${relativePath.replace(/\\/g, '/')}">
+</head>
+<body>
+  Redirecting...
+</body>
+</html>`);
+                        foundIndex = true;
+                        return true;
+                    }
+                }
+                return false;
+            };
+            findIndexFile(publicProjectDir);
+            // If no index.html was found, create a basic one
+            if (!foundIndex) {
+                fs_1.default.writeFileSync(indexPath, `<!DOCTYPE html>
+<html>
+<head>
+  <title>${projectTitle}</title>
+</head>
+<body>
+  <h1>${projectTitle}</h1>
+  <p>Deployed website</p>
+</body>
+</html>`);
+            }
+        }
+        // Return success with the deployment URL
+        // Note: In a real environment, you'd use your hosting URL
+        const deployUrl = `http://localhost:3000/sites/${sanitizedTitle}`;
+        res.json({
+            success: true,
+            message: 'Project deployed successfully',
+            deployUrl: deployUrl,
+            projectDir: sanitizedTitle,
+        });
+    }
+    catch (error) {
+        console.error('Deployment error:', error);
+        res.status(500).json({
+            error: 'Failed to deploy project',
+            details: error.message,
+        });
+    }
+}));
+// Serve static files from the public directory
+app.use('/sites', express_1.default.static(publicDir));
 app.listen(3000);
 // async function main() {
 //     anthropic.messages.stream({

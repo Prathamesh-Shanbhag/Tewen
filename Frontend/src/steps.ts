@@ -28,7 +28,13 @@ import { Step, StepType } from './types'
  *
  * The input can have strings in the middle they need to be ignored
  */
-export function parseXml(response: string): Step[] {
+export function parseXml(response: string | undefined): Step[] {
+  // Check if response is undefined or null
+  if (!response) {
+    console.warn('parseXml received undefined or null response')
+    return []
+  }
+
   // Extract the XML content between <tewenArtifact> tags
   const xmlMatch = response.match(
     /<tewenArtifact[^>]*>([\s\S]*?)<\/tewenArtifact>/

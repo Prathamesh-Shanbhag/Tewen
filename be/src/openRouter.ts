@@ -39,7 +39,7 @@ app.post('/template', async (req, res) => {
 
     try {
       const response = await openai.chat.completions.create({
-        model: 'google/gemini-2.0-pro-exp-02-05:free',
+        model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
         messages: [{ role: 'user', content: prompt }],
       })
 
@@ -100,7 +100,7 @@ app.post('/chat', async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-pro-exp-02-05:free',
+          model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
           messages: [messages, { role: 'system', content: getSystemPrompt() }],
           stream: true,
         }),

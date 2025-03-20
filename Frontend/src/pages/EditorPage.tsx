@@ -14,6 +14,7 @@ import {
   ChevronUp,
   Code2,
   Eye,
+  Cloud,
 } from 'lucide-react'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import ChatMessage, { Message } from '@/components/editor/ChatMessage'
 import ChatInput from '@/components/editor/ChatInput'
-import { StepsList } from '../components/StepsList'
 import { FileExplorer } from '../components/FileExplorer'
 import { CodeEditor } from '../components/CodeEditor'
 import { PreviewFrame } from '../components/PreviewFrame'
@@ -46,7 +46,7 @@ const EditorPage = () => {
   >([])
   const [loading, setLoading] = useState(false)
   const [templateSet, setTemplateSet] = useState(false)
-  const [currentStep, setCurrentStep] = useState(1)
+  // const [currentStep, setCurrentStep] = useState(1)
   const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code')
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null)
   const [steps, setSteps] = useState<Step[]>([])
@@ -63,6 +63,8 @@ const EditorPage = () => {
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deployUrl, setDeployUrl] = useState<string | null>(null)
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -78,10 +80,15 @@ const EditorPage = () => {
     console.log(`Loading State: ${loading}, prompt: ${prompt}`)
     let originalFiles = [...files]
     let updateHappened = false
+    // Track which steps were processed
+    const processedStepIds: number[] = []
+
     steps
       .filter(({ status }) => status === 'pending')
       .map((step) => {
         updateHappened = true
+        processedStepIds.push(step.id)
+
         if (step?.type === StepType.CreateFile) {
           let parsedPath = step.path?.split('/') ?? [] // ["src", "components", "App.tsx"]
           let currentFileStructure = [...originalFiles] // {}
@@ -134,15 +141,18 @@ const EditorPage = () => {
 
     if (updateHappened) {
       setFiles(originalFiles)
+      // Only mark steps that were actually processed as completed
       setSteps((steps) =>
         steps.map((s: Step) => {
           return {
             ...s,
-            status: 'completed',
+            // Only change status if this step was processed
+            status: processedStepIds.includes(s.id) ? 'completed' : s.status,
           }
         })
       )
       setShowPreview(true)
+      setActiveTab('preview')
     }
   }, [steps, files])
 
@@ -239,12 +249,20 @@ const EditorPage = () => {
       // Get the prompts and uiPrompts from the response
       const { prompts, uiPrompts } = response.data
 
-      setSteps(
-        parseXml(uiPrompts[0]).map((x: Step) => ({
-          ...x,
-          status: 'pending',
-        }))
-      )
+      // Make sure uiPrompts is defined and has at least one element
+      if (uiPrompts && uiPrompts.length > 0) {
+        const uiPromptData = uiPrompts[0] || ''
+        setSteps(
+          parseXml(uiPromptData).map((x: Step) => ({
+            ...x,
+            status: 'pending',
+          }))
+        )
+      } else {
+        console.warn('No UI prompts found in the response')
+        // Initialize with empty steps array
+        setSteps([])
+      }
 
       setLoading(true)
       const stepsResponse = await axios.post(
@@ -267,41 +285,71 @@ const EditorPage = () => {
       setIsGenerating(false)
 
       // Process the steps
-      setSteps((s) => [
-        ...s,
-        ...parseXml(stepsResponse.data.response).map((x) => ({
-          ...x,
-          status: 'pending' as 'pending',
-        })),
-      ])
+      if (stepsResponse.data) {
+        // Get the full response for processing
+        const fullResponseText = stepsResponse.data.response || ''
 
-      setLlmMessages(
-        [...prompts, userPrompt].map((content) => ({
-          role: 'user',
-          content,
-        }))
-      )
+        if (fullResponseText) {
+          // Parse steps from the full response
+          setSteps((s) => [
+            ...s,
+            ...parseXml(fullResponseText).map((x) => ({
+              ...x,
+              status: 'pending' as 'pending',
+            })),
+          ])
 
-      setLlmMessages((x) => [
-        ...x,
-        { role: 'assistant', content: stepsResponse.data.response },
-      ])
+          setLlmMessages(
+            [...prompts, userPrompt].map((content) => ({
+              role: 'user',
+              content,
+            }))
+          )
 
-      // Add the assistant response to the chat UI
-      const assistantMessage: Message = {
-        id: nanoid(),
-        type: 'assistant',
-        content: stepsResponse.data.response,
-        timestamp: new Date(),
+          setLlmMessages((x) => [
+            ...x,
+            { role: 'assistant', content: fullResponseText },
+          ])
+
+          // Add the curated assistant response to the chat UI
+          const assistantMessage: Message = {
+            id: nanoid(),
+            type: 'assistant',
+            content: `Project Title: 'New Project'
+Description: 'I am building your website based on your specifications. The files will appear in the file explorer once they're ready.'
+Build Steps:
+Initializing project structure
+Setting up essential files`,
+            timestamp: new Date(),
+          }
+          setMessages((prev) => [...prev, assistantMessage])
+          saveVersion()
+
+          toast({
+            title: 'Website has been generated!',
+            description:
+              'Your website has been generated. Click on the "Preview" button to see the website.',
+          })
+
+          setActiveTab('preview')
+        } else {
+          console.error('Empty response text from API')
+          toast({
+            title: 'Error',
+            description:
+              'Failed to generate website template. Empty response from server.',
+            variant: 'destructive',
+          })
+        }
+      } else {
+        console.error('Missing response data from API')
+        toast({
+          title: 'Error',
+          description:
+            'Failed to generate website template. Invalid response from server.',
+          variant: 'destructive',
+        })
       }
-      setMessages((prev) => [...prev, assistantMessage])
-      saveVersion()
-
-      toast({
-        title: 'Website has been generated!',
-        description:
-          'Your website has been generated. Click on the "Preview" button to see the website.',
-      })
     } catch (error) {
       console.error('Error initializing builder:', error)
       setIsGenerating(false)
@@ -354,33 +402,90 @@ const EditorPage = () => {
         setLoading(false)
         setIsGenerating(false)
 
-        setLlmMessages((x) => [...x, newMessage])
-        setLlmMessages((x) => [
-          ...x,
-          {
-            role: 'assistant',
-            content: stepsResponse.data.response,
-          },
-        ])
-
         // Parse new steps from response
-        setSteps((s) => [
-          ...s,
-          ...parseXml(stepsResponse.data.response).map((x) => ({
-            ...x,
-            status: 'pending' as 'pending',
-          })),
-        ])
+        if (stepsResponse.data) {
+          // Get the full response for processing
+          const fullResponseText = stepsResponse.data.response || ''
 
-        // Add the assistant response to the chat UI
-        const assistantMessage: Message = {
-          id: nanoid(),
-          type: 'assistant',
-          content: stepsResponse.data.response,
-          timestamp: new Date(),
+          if (fullResponseText) {
+            setLlmMessages((x) => [...x, newMessage])
+            setLlmMessages((x) => [
+              ...x,
+              {
+                role: 'assistant',
+                content: fullResponseText,
+              },
+            ])
+
+            // Parse new steps from response
+            setSteps((s) => [
+              ...s,
+              ...parseXml(fullResponseText).map((x) => ({
+                ...x,
+                status: 'pending' as 'pending',
+              })),
+            ])
+
+            // Process and extract relevant information from the response
+            const title =
+              stepsResponse.data.formattedResponse?.title || 'Update'
+            let description =
+              stepsResponse.data.formattedResponse?.description || ''
+
+            // Extract the first line of text from the response as a description if not already set
+            if (!description && fullResponseText) {
+              const firstLine = fullResponseText.split('\n')[0].trim()
+              if (
+                firstLine &&
+                !firstLine.startsWith('<') &&
+                firstLine.length < 200
+              ) {
+                description = firstLine
+              }
+            }
+
+            // Create a curated message for the chat UI
+            const steps = parseXml(fullResponseText)
+            const stepsList = steps.map((step) => step.title).join('\n')
+
+            // Format the chat message with Project Title, Description, and Build Steps
+            const formattedChatContent = `Project Title: '${title.replace(
+              /'/g,
+              "\\'"
+            )}'
+Description: '${description.replace(/'/g, "\\'")}'${
+              steps.length > 0 ? `\n\nBuild Steps:\n${stepsList}` : ''
+            }`
+
+            // Add the curated assistant response to the chat UI
+            const assistantMessage: Message = {
+              id: nanoid(),
+              type: 'assistant',
+              content: formattedChatContent,
+              timestamp: new Date(),
+            }
+            setMessages((prev) => [...prev, assistantMessage])
+            saveVersion()
+
+            setActiveTab('preview')
+          } else {
+            console.error('Empty response text from API')
+            toast({
+              title: 'Error',
+              description:
+                'Failed to process your request. Empty response from server.',
+              variant: 'destructive',
+            })
+          }
+        } else {
+          console.error('Missing response data from API')
+          toast({
+            title: 'Error',
+            description:
+              'Failed to process your request. Invalid response from server.',
+            variant: 'destructive',
+          })
         }
-        setMessages((prev) => [...prev, assistantMessage])
-        saveVersion()
       } catch (error) {
         console.error('Error sending chat message:', error)
         setIsGenerating(false)
@@ -397,6 +502,64 @@ const EditorPage = () => {
 
   const togglePreviewExpansion = () => {
     setIsPreviewExpanded(!isPreviewExpanded)
+  }
+
+  // Add a new function to handle deployment
+  const handleDeploy = async () => {
+    if (!files.length || isDeploying) return
+
+    setIsDeploying(true)
+
+    try {
+      // Get current project title for folder name
+      const projectTitle = getProjectTitle()
+
+      const response = await axios.post(
+        `${BACKEND_URL}/deploy`,
+        {
+          files: files,
+          projectTitle: projectTitle,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (response.data && response.data.deployUrl) {
+        setDeployUrl(response.data.deployUrl)
+        toast({
+          title: 'Deployment Successful!',
+          description: 'Your website has been deployed successfully.',
+        })
+      }
+    } catch (error) {
+      console.error('Error deploying website:', error)
+      toast({
+        title: 'Deployment Failed',
+        description:
+          'There was an error deploying your website. Please try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
+  // Helper function to get the current project title from messages
+  const getProjectTitle = () => {
+    // Find the last assistant message with a project title
+    const assistantMessages = messages.filter((m) => m.type === 'assistant')
+    for (let i = assistantMessages.length - 1; i >= 0; i--) {
+      const titleMatch = assistantMessages[i].content.match(
+        /Project Title:\s*['"](.+?)['"]/i
+      )
+      if (titleMatch && titleMatch[1]) {
+        return titleMatch[1].trim()
+      }
+    }
+    return 'new-project'
   }
 
   return (
@@ -445,7 +608,11 @@ const EditorPage = () => {
                 <ScrollArea className='flex-1'>
                   <div className='flex flex-col'>
                     {messages.map((message) => (
-                      <ChatMessage key={message.id} message={message} />
+                      <ChatMessage
+                        key={message.id}
+                        message={message}
+                        globalSteps={steps}
+                      />
                     ))}
                     {isGenerating && (
                       <div className='flex items-center gap-2 p-4 text-muted-foreground'>
@@ -594,7 +761,36 @@ const EditorPage = () => {
                         <Eye className='h-4 w-4' />
                         Preview
                       </Button>
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        onClick={handleDeploy}
+                        disabled={isDeploying || !files.length}
+                        className='flex items-center gap-2'
+                      >
+                        {isDeploying ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : (
+                          <Cloud className='h-4 w-4' />
+                        )}
+                        Deploy
+                      </Button>
                     </div>
+
+                    {/* If we have a deploy URL, show it */}
+                    {deployUrl && (
+                      <div className='hidden md:flex items-center ml-4'>
+                        <a
+                          href={deployUrl}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className='text-sm text-blue-500 hover:underline flex items-center gap-1'
+                        >
+                          <Cloud className='h-3 w-3' />
+                          {deployUrl}
+                        </a>
+                      </div>
+                    )}
 
                     {/* Responsive Controls - Only shown in preview mode */}
                     {activeTab === 'preview' && (
@@ -656,7 +852,6 @@ const EditorPage = () => {
                     >
                       {webcontainer ? (
                         <PreviewFrame
-                          finishedGenerating={() => setActiveTab('preview')}
                           webContainer={webcontainer}
                           files={files}
                         />

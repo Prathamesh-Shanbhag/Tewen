@@ -44,7 +44,7 @@ app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         let framework = 'react';
         try {
             const response = yield openai.chat.completions.create({
-                model: 'google/gemini-2.0-pro-exp-02-05:free',
+                model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
                 messages: [{ role: 'user', content: prompt }],
             });
             const answer = (_a = response.choices[0].message.content) === null || _a === void 0 ? void 0 : _a.trim();
@@ -99,7 +99,7 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'google/gemini-2.0-pro-exp-02-05:free',
+                model: 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free',
                 messages: [messages, { role: 'system', content: (0, prompts_1.getSystemPrompt)() }],
                 stream: true,
             }),

@@ -5,7 +5,6 @@ import { Loader2 } from 'lucide-react'
 interface PreviewFrameProps {
   files: any[]
   webContainer: WebContainer
-  finishedGenerating: () => void
 }
 
 export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
