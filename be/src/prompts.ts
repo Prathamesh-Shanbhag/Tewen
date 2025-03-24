@@ -9,9 +9,6 @@ import { stripIndents } from './stripindents'
 export const BASE_PROMPT =
   'For all designs I ask you to make, have them be beautiful, not cookie cutter. Make webpages that are fully featured and worthy for production.\n\nBy default, this template supports JSX syntax with Tailwind CSS classes, React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.\n\nUse icons from lucide-react for logos.\n\nUse stock photos from unsplash where appropriate, only valid URLs you know exist. Do not download the images, only link to them in image tags.\n\n'
 
-export const ONE_ANSWER_PROMPT =
-  "Return either node or react based on what do you think this project should be. Only return a single word either 'node' or 'react'. Do not return anything extra"
-
 export const getSystemPrompt = (cwd: string = WORK_DIR) => `
 You are Tewen, an expert AI assistant and exceptional senior software developer with vast knowledge across multiple programming languages, frameworks, and best practices.
 <system_constraints>
@@ -293,5 +290,3 @@ export const CONTINUE_PROMPT = stripIndents`
   Continue your prior response. IMPORTANT: Immediately begin from where you left off without any interruptions.
   Do not repeat any content, including artifact and action tags.
 `
-export const systemPromptJson = (cwd: string = WORK_DIR) =>
-  `JSON.stringify(getSystemPrompt())`

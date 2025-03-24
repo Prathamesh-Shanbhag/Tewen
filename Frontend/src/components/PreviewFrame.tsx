@@ -5,7 +5,6 @@ import { Loader2 } from 'lucide-react'
 interface PreviewFrameProps {
   files: any[]
   webContainer: WebContainer
-  finishedGenerating: () => void
 }
 
 export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
@@ -83,7 +82,7 @@ export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
       {isLoading && (
         <div className='text-center'>
           <Loader2 className='h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2' />
-          <p>Setting up development environment...</p>
+          <p>Setting up preview environment...</p>
         </div>
       )}
 

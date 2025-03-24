@@ -22,7 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import ChatMessage, { Message } from '@/components/editor/ChatMessage'
 import ChatInput from '@/components/editor/ChatInput'
-import { StepsList } from '../components/StepsList'
+// import { StepsList } from '../components/StepsList'
 import { FileExplorer } from '../components/FileExplorer'
 import { CodeEditor } from '../components/CodeEditor'
 import { PreviewFrame } from '../components/PreviewFrame'
@@ -38,23 +38,22 @@ interface VersionHistory {
 }
 
 const EditorPage = () => {
-  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
   const [prompt, setPrompt] = useState('')
   // Builder functionality
   const [llmMessages, setLlmMessages] = useState<
     { role: 'user' | 'assistant'; content: string }[]
   >([])
-  const [loading, setLoading] = useState(false)
   const [templateSet, setTemplateSet] = useState(false)
-  const [currentStep, setCurrentStep] = useState(1)
   const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code')
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null)
   const [steps, setSteps] = useState<Step[]>([])
   const [files, setFiles] = useState<FileItem[]>([])
   // const [url, setUrl] = useState<string | null>(null)
+  // const [currentStep, setCurrentStep] = useState(1)
 
   // Original EditorPage functionality
   const [messages, setMessages] = useState<Message[]>([])
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [viewportDevice, setViewportDevice] = useState('desktop')
   const [showPreview, setShowPreview] = useState(false)
@@ -75,7 +74,7 @@ const EditorPage = () => {
   // Builder functionality - handle file updates from steps
   const webcontainer = useWebContainer()
   useEffect(() => {
-    console.log(`Loading State: ${loading}, prompt: ${prompt}`)
+    console.log(`Loading State: ${isGenerating}, prompt: ${prompt}`)
     let originalFiles = [...files]
     let updateHappened = false
     steps
@@ -221,18 +220,9 @@ const EditorPage = () => {
     setIsGenerating(true)
 
     try {
-      const response = await axios.post(
-        `${BACKEND_URL}/template`,
-        {
-          prompt: userPrompt.trim(),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`, // Ensure this is set correctly
-            'Content-Type': 'application/json',
-          },
-        }
-      )
+      const response = await axios.post(`${BACKEND_URL}/template`, {
+        prompt: userPrompt.trim(),
+      })
 
       // Set the template set to true because we have the template
       setTemplateSet(true)
@@ -246,24 +236,13 @@ const EditorPage = () => {
         }))
       )
 
-      setLoading(true)
-      const stepsResponse = await axios.post(
-        `${BACKEND_URL}/chat`,
-        {
-          messages: [...prompts, userPrompt].map((content) => ({
-            role: 'user',
-            content,
-          })),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`, // Ensure this is set correctly
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-
-      setLoading(false)
+      setIsGenerating(true)
+      const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
+        messages: [...prompts, userPrompt].map((content) => ({
+          role: 'user',
+          content,
+        })),
+      })
       setIsGenerating(false)
 
       // Process the steps
@@ -291,7 +270,11 @@ const EditorPage = () => {
       const assistantMessage: Message = {
         id: nanoid(),
         type: 'assistant',
-        content: stepsResponse.data.response,
+        content: `Project Title: ${
+          stepsResponse.data[0]?.title || 'New Project'
+        }
+Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
+Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, assistantMessage])
@@ -338,20 +321,10 @@ const EditorPage = () => {
           content: content,
         }
 
-        setLoading(true)
-        const stepsResponse = await axios.post(
-          `${BACKEND_URL}/chat`,
-          {
-            messages: [...llmMessages, newMessage],
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${apiKey}`, // Ensure this is set correctly
-              'Content-Type': 'application/json',
-            },
-          }
-        )
-        setLoading(false)
+        setIsGenerating(true)
+        const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
+          messages: [...llmMessages, newMessage],
+        })
         setIsGenerating(false)
 
         setLlmMessages((x) => [...x, newMessage])
@@ -376,7 +349,11 @@ const EditorPage = () => {
         const assistantMessage: Message = {
           id: nanoid(),
           type: 'assistant',
-          content: stepsResponse.data.response,
+          content: `Project Title: ${
+            stepsResponse.data[0]?.title || 'New Project'
+          }
+Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
+Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
           timestamp: new Date(),
         }
         setMessages((prev) => [...prev, assistantMessage])
@@ -384,7 +361,6 @@ const EditorPage = () => {
       } catch (error) {
         console.error('Error sending chat message:', error)
         setIsGenerating(false)
-        setLoading(false)
 
         toast({
           title: 'Error',
@@ -433,6 +409,7 @@ const EditorPage = () => {
                     <Button
                       variant='outline'
                       size='sm'
+                      // Hardcoded to restore the first version - TODO: change this to restore to only last saved version
                       onClick={() => restoreVersion(versionHistory[0])}
                       className='flex items-center gap-2'
                     >
@@ -441,7 +418,7 @@ const EditorPage = () => {
                     </Button>
                   )}
                 </div>
-
+                {/* Chat Messages - Currently not wrapping the messages in a scroll area */}
                 <ScrollArea className='flex-1'>
                   <div className='flex flex-col'>
                     {messages.map((message) => (
@@ -459,7 +436,7 @@ const EditorPage = () => {
 
                 <ChatInput onSubmit={handleSubmit} isLoading={isGenerating} />
               </div>
-
+              {/* If build steps are not generated move the steps list into the Scroll Area */}
               {/* Steps List - Show if we have steps
               {steps.length > 0 && (
                 <div className='h-1/3 border-t overflow-auto'>
@@ -656,7 +633,6 @@ const EditorPage = () => {
                     >
                       {webcontainer ? (
                         <PreviewFrame
-                          finishedGenerating={() => setActiveTab('preview')}
                           webContainer={webcontainer}
                           files={files}
                         />
@@ -664,7 +640,8 @@ const EditorPage = () => {
                         <div className='h-full flex flex-col items-center justify-center'>
                           <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
                           <p className='mt-2 text-muted-foreground'>
-                            Initializing preview...
+                            The code is still being generated...wait for
+                            preview.
                           </p>
                         </div>
                       )}

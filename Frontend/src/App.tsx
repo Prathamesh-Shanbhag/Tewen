@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { AnimatePresence } from 'framer-motion'
 import { Home } from './pages/Home'
@@ -12,17 +12,21 @@ import EditorPage from '@/pages/EditorPage'
 // import NotFoundPage from '@/pages/NotFoundPage'
 
 function App() {
+  const location = useLocation()
+
   return (
-    <AnimatePresence mode='wait'>
-      <Routes>
-        <Route path='/' element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path='editor' element={<EditorPage />} />
-          {/* <Route path='builder' element={<Builder />} /> */}
-        </Route>
-      </Routes>
+    <>
+      <AnimatePresence mode='wait'>
+        <Routes location={location} key={location.pathname}>
+          <Route path='/' element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path='editor' element={<EditorPage />} />
+            {/* <Route path='builder' element={<Builder />} /> */}
+          </Route>
+        </Routes>
+      </AnimatePresence>
       <Toaster />
-    </AnimatePresence>
+    </>
   )
 }
 

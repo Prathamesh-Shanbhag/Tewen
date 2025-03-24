@@ -24,9 +24,8 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'system',
-  storageKey = 'vite-ui-theme',
-  ...props
+  defaultTheme = 'dark',
+  storageKey = 'tewen-theme',
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
@@ -34,6 +33,10 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = window.document.documentElement
+
+    // First, remove both theme classes
+    root.classList.remove('light', 'dark')
+
     if (theme === 'system') {
       const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
         .matches
@@ -45,9 +48,6 @@ export function ThemeProvider({
     } else {
       root.classList.add(theme)
     }
-
-    // Log final state
-    console.log('Final classes on root:', root.classList.toString())
   }, [theme])
 
   const value = {
@@ -60,7 +60,7 @@ export function ThemeProvider({
   }
 
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <ThemeProviderContext.Provider value={value}>
       {children}
     </ThemeProviderContext.Provider>
   )

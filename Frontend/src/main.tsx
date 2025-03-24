@@ -8,7 +8,7 @@ import './index.css'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <ThemeProvider defaultTheme='system' storageKey='tewen-theme'>
+      <ThemeProvider defaultTheme='dark' storageKey='tewen-theme'>
         <App />
       </ThemeProvider>
     </BrowserRouter>
