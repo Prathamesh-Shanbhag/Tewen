@@ -1,3 +1,6 @@
 node_modules
 .DS_Store
 .env
+openai.ts
+openrouter.ts
+gemini.ts

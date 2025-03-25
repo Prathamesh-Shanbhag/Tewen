@@ -65,7 +65,7 @@ function FileNode({ item, depth, onFileClick }: FileNodeProps) {
 
 export function FileExplorer({ files, onFileSelect }: FileExplorerProps) {
   return (
-    <div className='bg-white dark:bg-black rounded-lg shadow-lg p-4 h-full overflow-auto'>
+    <div className='rounded-lg shadow-lg p-4 h-full overflow-auto'>
       <h2 className='text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-white'>
         <FolderTree className='w-5 h-5' />
         File Explorer

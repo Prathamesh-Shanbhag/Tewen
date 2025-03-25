@@ -16,7 +16,9 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
+::-webkit-scrollbar {
+  display: none;
+}
 @layer base {
   :root {
     --background: 0 0% 100%;

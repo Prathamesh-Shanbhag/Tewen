@@ -4,8 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsc -b && node dist/index.js",
-    "dev-g": "tsc -b && node dist/gemini.js",
-    "dev-op": "tsc -b && node dist/openRouter.js"
+    "dev-openai": "tsc -b && node dist/openai.js"
   },
   "keywords": [],
   "author": "",

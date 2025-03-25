@@ -45,7 +45,7 @@ export function parseXml(response: string): Step[] {
   // Extract artifact title
   const titleMatch = response.match(/title="([^"]*)"/)
   const artifactTitle = titleMatch ? titleMatch[1] : 'Project Files'
-
+  console.log('Artifact Title', artifactTitle)
   // Add initial artifact step
   steps.push({
     id: stepId++,

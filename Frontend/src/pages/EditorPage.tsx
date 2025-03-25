@@ -28,7 +28,7 @@ import { CodeEditor } from '../components/CodeEditor'
 import { PreviewFrame } from '../components/PreviewFrame'
 import { Step, FileItem, StepType } from '../types'
 import { BACKEND_URL } from '../config'
-import { parseXml } from '../steps'
+import { parseXml } from '../stepsopenai'
 import { useWebContainer } from '../hooks/useWebContainer'
 
 interface VersionHistory {
@@ -244,7 +244,6 @@ const EditorPage = () => {
         })),
       })
       setIsGenerating(false)
-
       // Process the steps
       setSteps((s) => [
         ...s,
@@ -253,14 +252,14 @@ const EditorPage = () => {
           status: 'pending' as 'pending',
         })),
       ])
-
+      console.log('Steps', steps)
       setLlmMessages(
         [...prompts, userPrompt].map((content) => ({
           role: 'user',
           content,
         }))
       )
-
+      console.log('LLM Messages', llmMessages)
       setLlmMessages((x) => [
         ...x,
         { role: 'assistant', content: stepsResponse.data.response },
@@ -270,10 +269,8 @@ const EditorPage = () => {
       const assistantMessage: Message = {
         id: nanoid(),
         type: 'assistant',
-        content: `Project Title: ${
-          stepsResponse.data[0]?.title || 'New Project'
-        }
-Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
+        content: `Project Title: ${steps[0]?.title || 'New Project'}
+Description: ${steps[0]?.description || 'Initializing project...'}
 Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         timestamp: new Date(),
       }
@@ -285,6 +282,10 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         description:
           'Your website has been generated. Click on the "Preview" button to see the website.',
       })
+      // setTimeout(() => {
+      //   setActiveTab('preview')
+      //   console.log('Setting active tab to preview')
+      // }, 5000)
     } catch (error) {
       console.error('Error initializing builder:', error)
       setIsGenerating(false)
@@ -349,10 +350,8 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         const assistantMessage: Message = {
           id: nanoid(),
           type: 'assistant',
-          content: `Project Title: ${
-            stepsResponse.data[0]?.title || 'New Project'
-          }
-Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
+          content: `Project Title: ${steps[0]?.title || 'New Project'}
+Description: ${steps[0]?.description || 'Initializing project...'}
 Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
           timestamp: new Date(),
         }
@@ -512,11 +511,12 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
           </motion.div>
 
           {/* Middle Panel - File Explorer */}
+
           {showPreview && !isPreviewExpanded && (
             <motion.div
               initial={{ width: '0%', opacity: 0 }}
               animate={{
-                width: window.innerWidth >= 1024 ? '20%' : '100%',
+                width: window.innerWidth >= 1024 ? '15%' : '100%',
                 opacity: 1,
               }}
               exit={{ width: '0%', opacity: 0 }}

@@ -1,36 +1,44 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Wand2, History, Home, Info, Menu, X, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ModeToggle } from '@/components/layout/ModeToggle';
-import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Wand2, History, Home, Info, Menu, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ModeToggle } from '@/components/layout/ModeToggle'
+import { cn } from '@/lib/utils'
 
 const Navbar = () => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const location = useLocation();
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
+      setIsScrolled(window.scrollY > 10)
+    }
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const navLinks = [
-    { name: 'Home', path: '/', icon: <Home className="h-4 w-4 mr-1" /> },
-    { name: 'Editor', path: '/editor', icon: <Wand2 className="h-4 w-4 mr-1" /> },
-    { name: 'History', path: '/history', icon: <History className="h-4 w-4 mr-1" /> },
-    { name: 'About', path: '/about', icon: <Info className="h-4 w-4 mr-1" /> },
-  ];
+    { name: 'Home', path: '/', icon: <Home className='h-4 w-4 mr-1' /> },
+    {
+      name: 'Editor',
+      path: '/editor',
+      icon: <Wand2 className='h-4 w-4 mr-1' />,
+    },
+    {
+      name: 'History',
+      path: '/history',
+      icon: <History className='h-4 w-4 mr-1' />,
+    },
+    { name: 'About', path: '/about', icon: <Info className='h-4 w-4 mr-1' /> },
+  ]
 
   const logoVariants = {
     initial: { scale: 1 },
-    hover: { scale: 1.05, transition: { duration: 0.2 } }
-  };
+    hover: { scale: 1.05, transition: { duration: 0.2 } },
+  }
 
   return (
     <header
@@ -41,29 +49,29 @@ const Navbar = () => {
           : 'bg-transparent'
       )}
     >
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
+      <div className='container mx-auto px-4 py-3'>
+        <div className='flex items-center justify-between'>
           <motion.div
             variants={logoVariants}
-            initial="initial"
-            whileHover="hover"
+            initial='initial'
+            whileHover='hover'
           >
-            <Link to="/" className="flex items-center space-x-2">
-              <Wand2 className="h-6 w-6 text-primary" />
-              <span className="font-bold text-xl">Tewen</span>
+            <Link to='/' className='flex items-center space-x-2'>
+              <Wand2 className='h-6 w-6 text-primary' />
+              <span className='font-bold text-xl'>Tewen</span>
             </Link>
           </motion.div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className='hidden md:flex items-center space-x-1'>
             {navLinks.map((link) => (
               <Button
                 key={link.path}
-                variant={location.pathname === link.path ? "default" : "ghost"}
-                size="sm"
+                variant={location.pathname === link.path ? 'default' : 'ghost'}
+                size='sm'
                 asChild
               >
-                <Link to={link.path} className="flex items-center">
+                <Link to={link.path} className='flex items-center'>
                   {link.icon}
                   {link.name}
                 </Link>
@@ -71,23 +79,23 @@ const Navbar = () => {
             ))}
           </nav>
 
-          <div className="flex items-center space-x-2">
+          <div className='flex items-center space-x-2'>
             <ModeToggle />
-            <Button variant="ghost" size="icon">
+            {/* <Button variant="ghost" size="icon">
               <User className="h-5 w-5" />
-            </Button>
-            
+            </Button> */}
+
             {/* Mobile Menu Button */}
             <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
+              variant='ghost'
+              size='icon'
+              className='md:hidden'
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               {isMobileMenuOpen ? (
-                <X className="h-5 w-5" />
+                <X className='h-5 w-5' />
               ) : (
-                <Menu className="h-5 w-5" />
+                <Menu className='h-5 w-5' />
               )}
             </Button>
           </div>
@@ -101,19 +109,19 @@ const Navbar = () => {
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2 }}
-          className="md:hidden bg-background/95 backdrop-blur-md border-b"
+          className='md:hidden bg-background/95 backdrop-blur-md border-b'
         >
-          <nav className="container mx-auto px-4 py-3 flex flex-col space-y-2">
+          <nav className='container mx-auto px-4 py-3 flex flex-col space-y-2'>
             {navLinks.map((link) => (
               <Button
                 key={link.path}
-                variant={location.pathname === link.path ? "default" : "ghost"}
-                size="sm"
+                variant={location.pathname === link.path ? 'default' : 'ghost'}
+                size='sm'
                 asChild
-                className="justify-start"
+                className='justify-start'
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Link to={link.path} className="flex items-center">
+                <Link to={link.path} className='flex items-center'>
                   {link.icon}
                   {link.name}
                 </Link>
@@ -123,7 +131,7 @@ const Navbar = () => {
         </motion.div>
       )}
     </header>
-  );
-};
+  )
+}
 
-export default Navbar;
+export default Navbar

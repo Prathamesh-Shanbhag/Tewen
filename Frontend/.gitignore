@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 Builder.tsx
 *.env
+src/stepsopenai.ts
