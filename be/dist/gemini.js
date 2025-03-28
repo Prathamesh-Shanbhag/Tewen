@@ -14,46 +14,29 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require('dotenv').config();
 const express_1 = __importDefault(require("express"));
-const openai_1 = require("openai");
+const genai_1 = require("@google/genai");
 const prompts_1 = require("./prompts");
 const react_1 = require("./defaults/react");
 const node_1 = require("./defaults/node");
 console.log('Environment variables loaded');
 const cors_1 = __importDefault(require("cors"));
-const openai = new openai_1.OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+const ai = new genai_1.GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const prompt = req.body.prompt;
     try {
-        // Using the correct format for OpenAI API
-        const response = yield openai.responses.create({
-            model: 'gpt-4o-mini',
-            input: [
-                {
-                    role: 'system',
-                    content: `Return either node or react based on what do you think this project should be. Only return a single word either 'node' or 'react'. Do not return anything extra`,
-                },
-                {
-                    role: 'user',
-                    content: prompt,
-                },
-            ],
-            text: {
-                format: {
-                    type: 'text',
-                },
+        // Using the correct format for Gemini API
+        const response = yield ai.models.generateContent({
+            model: 'gemini-2.5-pro-exp-03-25',
+            contents: prompt,
+            config: {
+                systemInstruction: `Return either node or react based on what do you think this project should be. Only return a single word either 'node' or 'react'. Do not return anything extra`,
             },
-            temperature: 1,
-            max_output_tokens: 100,
-            top_p: 1,
-            store: true,
         });
-        console.log(response.output_text);
-        const answer = response.output_text; // React or Node
+        console.log(response.text);
+        const answer = response.text; // React or Node
         if (answer === 'react' || answer === 'node') {
             res.json({
                 prompts: [
@@ -73,29 +56,25 @@ app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 }));
 app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const messages = req.body.messages;
-    // This makes sure the messages are an array that matches the OpenAI API format
     try {
         const formattedMessages = Array.isArray(messages)
             ? messages.map((msg) => ({
                 role: msg.role,
-                content: msg.content,
+                parts: [{ text: msg.content }],
             }))
-            : [{ role: 'user', content: JSON.stringify(messages) }];
-        // Add system message at the beginning
-        formattedMessages.unshift({
-            role: 'system',
-            content: (0, prompts_1.getSystemPrompt)(),
+            : [{ role: 'user', parts: [{ text: JSON.stringify(messages) }] }];
+        const codeResponse = yield ai.models.generateContent({
+            model: 'gemini-2.5-pro-exp-03-25',
+            contents: formattedMessages,
+            config: {
+                systemInstruction: (0, prompts_1.getSystemPrompt)(),
+            },
         });
-        const stream = yield openai.responses.create({
-            // Using this
-            model: 'gpt-4o-mini',
-            input: formattedMessages,
-        });
-        console.log(stream.output_text);
-        let rawText = stream.output_text;
-        // Redundacy Function for backend extraction in case front-end extraction fails.
-        // Extract the raw text from the response
+        const responseText = (_a = codeResponse === null || codeResponse === void 0 ? void 0 : codeResponse.text) !== null && _a !== void 0 ? _a : 'No response from model';
+        let rawText = responseText;
+        console.log('rawText::', rawText);
         // Extract the title from the response using improved regex
         const titleMatch = rawText.match(/<tewenArtifact[^>]*title="([^"]*)"/);
         const title = titleMatch ? titleMatch[1] : null;
@@ -110,6 +89,13 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             description = sentenceMatch ? sentenceMatch[1] : initialText;
         }
         console.log('description::', description);
+        // Extract the steps from the response using improved regex
+        const stepsMatch = rawText.match(/<tewenAction\s+type="([^"]*)"(?:\s+filePath="([^"]*)")?>([\s\S]*?)<\/tewenAction>/g);
+        console.log('stepsMatch::', stepsMatch);
+        // let match
+        // while ((match = stepsMatch.exec(rawText)) !== null) {
+        //   console.log('match::', match)
+        // }
         // Format the response for the frontend
         const formattedResponse = {
             title: title,
@@ -129,15 +115,3 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 }));
 app.listen(3000);
-// Commented out streaming implementation for future reference
-// async function main() {
-//   const result = await model.generateContentStream([
-//     { text: "Hello" }
-//   ])
-//
-//   for await (const chunk of result.stream) {
-//     console.log(chunk.text());
-//   }
-// }
-//
-// main();

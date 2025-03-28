@@ -82,45 +82,42 @@ app.post('/chat', async (req, res) => {
       content: getSystemPrompt(),
     })
     const stream = await openai.responses.create({
+      // Using this
       model: 'gpt-4o-mini',
       input: formattedMessages,
     })
     console.log(stream.output_text)
-    // let rawText = stream.output_text
+    let rawText = stream.output_text
 
     // Redundacy Function for backend extraction in case front-end extraction fails.
     // Extract the raw text from the response
 
-    // Extract the title from the response using regex
-    //   const titleMatch = rawText.match(
-    //     /<tewenArtifact id="[^"]*" title="([^"]*)">/
-    //   )
-    //   const title = titleMatch ? titleMatch[1] : 'New Project'
+    // Extract the title from the response using improved regex
+    const titleMatch = rawText.match(/<tewenArtifact[^>]*title="([^"]*)"/)
+    const title = titleMatch ? titleMatch[1] : null
+    console.log('title::', title)
 
-    //   // Extract the initial text description (everything before the first <tewen tag)
-    //   let description = ''
-    //   const firstTagIndex = rawText.indexOf('<tewen')
-    //   if (firstTagIndex > 0) {
-    //     description = rawText.substring(0, firstTagIndex).trim()
-    //   }
+    // Extract the first full sentence from the description
+    let description = ''
+    const firstTagIndex = rawText.indexOf('<tewen')
+    if (firstTagIndex > 0) {
+      const initialText = rawText.substring(0, firstTagIndex).trim()
+      // Find the first sentence (ending with period, question mark, or exclamation point)
+      const sentenceMatch = initialText.match(/^(.*?[.!?])\s/)
+      description = sentenceMatch ? sentenceMatch[1] : initialText
+    }
+    console.log('description::', description)
 
-    //   // Format the response for the frontend
-    //   const formattedResponse = {
-    //     title: title,
-    //     description: description,
-    //   }
+    // Format the response for the frontend
+    const formattedResponse = {
+      title: title,
+      description: description,
+    }
 
-    //   res.json({
-    //     response: rawText,
-    //     formattedResponse: formattedResponse,
-    //   })
-    // } catch (error: any) {
-    //   console.error('Error in chat endpoint:', error)
-    //   res.status(500).json({
-    //     error: 'Failed to process request',
-    //     details: error.message || String(error),
-    //   })
-    // }
+    res.json({
+      response: rawText,
+      formattedResponse: formattedResponse,
+    })
   } catch (error: any) {
     console.error('Error in chat endpoint:', error)
     res.status(500).json({

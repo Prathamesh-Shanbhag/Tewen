@@ -4,7 +4,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/lib/utils'
 import { Bot, User } from 'lucide-react'
-
 export interface Message {
   id: string
   type: 'user' | 'assistant'
@@ -40,10 +39,11 @@ const ChatMessage = memo(({ message }: ChatMessageProps) => {
         <ReactMarkdown
           className='prose dark:prose-invert max-w-none'
           components={{
-            code({ node, inline, className, children, ...props }) {
+            code({ inline, className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || '')
               return !inline && match ? (
                 <SyntaxHighlighter
+                  // @ts-ignore - Known issue with react-syntax-highlighter types
                   style={vscDarkPlus}
                   language={match[1]}
                   PreTag='div'

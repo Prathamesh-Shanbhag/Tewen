@@ -204,6 +204,7 @@ const EditorPage = () => {
       timestamp: new Date(),
     }
     setVersionHistory((prev) => [version, ...prev])
+    // console.log('Version History::', versionHistory)
   }
 
   const restoreVersion = (version: VersionHistory) => {
@@ -221,13 +222,15 @@ const EditorPage = () => {
 
     try {
       const response = await axios.post(`${BACKEND_URL}/template`, {
-        prompt: userPrompt.trim(),
+        prompt: userPrompt,
       })
 
       // Set the template set to true because we have the template
       setTemplateSet(true)
       // Get the prompts and uiPrompts from the response
       const { prompts, uiPrompts } = response.data
+      // console.log('Prompts', prompts)
+      // console.log('Ui Prompts', uiPrompts)
 
       setSteps(
         parseXml(uiPrompts[0]).map((x: Step) => ({
@@ -235,8 +238,12 @@ const EditorPage = () => {
           status: 'pending',
         }))
       )
-
+      console.log(
+        'steps???',
+        steps.map((step) => `${step.title}: ${step.status}`)
+      )
       setIsGenerating(true)
+
       const stepsResponse = await axios.post(`${BACKEND_URL}/chat`, {
         messages: [...prompts, userPrompt].map((content) => ({
           role: 'user',
@@ -244,8 +251,7 @@ const EditorPage = () => {
         })),
       })
       setIsGenerating(false)
-
-      // Process the steps
+      // Add the new steps to the steps array
       setSteps((s) => [
         ...s,
         ...parseXml(stepsResponse.data.response).map((x) => ({
@@ -254,13 +260,13 @@ const EditorPage = () => {
         })),
       ])
 
+      // Add the user prompt to the already available prompts
       setLlmMessages(
         [...prompts, userPrompt].map((content) => ({
           role: 'user',
           content,
         }))
       )
-
       setLlmMessages((x) => [
         ...x,
         { role: 'assistant', content: stepsResponse.data.response },
@@ -270,11 +276,14 @@ const EditorPage = () => {
       const assistantMessage: Message = {
         id: nanoid(),
         type: 'assistant',
-        content: `Project Title: ${
-          stepsResponse.data[0]?.title || 'New Project'
-        }
-Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
-Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
+        content: `
+Project Title: ${
+          stepsResponse.data.formattedResponse.title || `${messages[0].content}`
+        }\n\n\n
+Description: ${
+          stepsResponse.data.formattedResponse.description ||
+          'Initializing project...'
+        }`,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, assistantMessage])
@@ -285,6 +294,10 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         description:
           'Your website has been generated. Click on the "Preview" button to see the website.',
       })
+      setTimeout(() => {
+        setActiveTab('preview')
+        console.log('Setting active tab to preview')
+      }, 5000)
     } catch (error) {
       console.error('Error initializing builder:', error)
       setIsGenerating(false)
@@ -349,13 +362,18 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
         const assistantMessage: Message = {
           id: nanoid(),
           type: 'assistant',
-          content: `Project Title: ${
-            stepsResponse.data[0]?.title || 'New Project'
-          }
-Description: ${stepsResponse.data[0]?.description || 'Initializing project...'}
-Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
+          content: `
+Project Title: ${
+            stepsResponse.data.formattedResponse.title ||
+            `${messages[0].content}`
+          }\n\n\n
+Description: ${
+            stepsResponse.data.formattedResponse.description ||
+            'Initializing project...'
+          }`,
           timestamp: new Date(),
         }
+
         setMessages((prev) => [...prev, assistantMessage])
         saveVersion()
       } catch (error) {
@@ -436,7 +454,7 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
 
                 <ChatInput onSubmit={handleSubmit} isLoading={isGenerating} />
               </div>
-              {/* If build steps are not generated move the steps list into the Scroll Area */}
+
               {/* Steps List - Show if we have steps
               {steps.length > 0 && (
                 <div className='h-1/3 border-t overflow-auto'>
@@ -492,8 +510,12 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
                                 <History className='h-4 w-4 mr-2' />
                                 {version.messages[
                                   version.messages.length - 2
-                                ]?.content.slice(0, 30)}
-                                ...
+                                ]?.content.slice(0, 27)}
+                                {version.messages[version.messages.length - 2]
+                                  ?.content.length > 27
+                                  ? '...'
+                                  : 'Start from scratch'}
+
                                 <span className='ml-auto text-xs text-muted-foreground'>
                                   {new Date(
                                     version.timestamp
@@ -568,8 +590,12 @@ Build Steps:${steps.map((x) => `${x.title}: ${x.description}`).join('\n')}`,
                         onClick={() => setActiveTab('preview')}
                         className='flex items-center gap-2'
                       >
-                        <Eye className='h-4 w-4' />
-                        Preview
+                        {isGenerating ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : (
+                          <Eye className='h-4 w-4' />
+                        )}
+                        {isGenerating ? 'Generating...' : 'Preview'}
                       </Button>
                     </div>
 
