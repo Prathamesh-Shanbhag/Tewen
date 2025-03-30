@@ -14,6 +14,9 @@ import {
   ChevronUp,
   Code2,
   Eye,
+  Download,
+  Globe,
+  SquareArrowOutUpRight,
 } from 'lucide-react'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
@@ -41,7 +44,7 @@ const EditorPage = () => {
   const [prompt, setPrompt] = useState('')
   // Builder functionality
   const [llmMessages, setLlmMessages] = useState<
-    { role: 'user' | 'assistant'; content: string }[]
+    { role: 'user' | 'assistant' | 'model'; content: string }[]
   >([])
   const [templateSet, setTemplateSet] = useState(false)
   const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code')
@@ -62,6 +65,10 @@ const EditorPage = () => {
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+
+  // Add state for deployment status
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deployedUrl, setDeployedUrl] = useState<string | null>(null)
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -269,7 +276,7 @@ const EditorPage = () => {
       )
       setLlmMessages((x) => [
         ...x,
-        { role: 'assistant', content: stepsResponse.data.response },
+        { role: 'model', content: stepsResponse.data.response },
       ])
 
       // Add the assistant response to the chat UI
@@ -344,7 +351,7 @@ Description: ${
         setLlmMessages((x) => [
           ...x,
           {
-            role: 'assistant',
+            role: 'model',
             content: stepsResponse.data.response,
           },
         ])
@@ -393,6 +400,228 @@ Description: ${
     setIsPreviewExpanded(!isPreviewExpanded)
   }
 
+  // Add a function to extract project title from messages
+  const getProjectTitle = () => {
+    // Try to find the first assistant message that contains a project title
+    const assistantMessage = messages.find(
+      (msg) =>
+        msg.type === 'assistant' && msg.content.includes('Project Title:')
+    )
+
+    if (assistantMessage) {
+      // Extract the title from the message content
+      const titleMatch = assistantMessage.content.match(
+        /Project Title: (.*?)(?:\n|$)/
+      )
+      if (titleMatch && titleMatch[1]) {
+        // Clean up the title for use as a folder name
+        return titleMatch[1]
+          .trim()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, '-')
+      }
+    }
+
+    // Fallback to a default name if no title is found
+    return 'my-website-project'
+  }
+
+  // Add download functionality to save project locally
+  const handleDownload = async () => {
+    if (!files.length) {
+      toast({
+        title: 'No files to download',
+        description: 'Generate a website first before downloading.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      // Create a zip file containing all project files
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+
+      // Get project title for the folder name
+      const projectTitle = getProjectTitle()
+
+      // Function to recursively add files to zip
+      const addFilesToZip = (fileItems: FileItem[], parentFolder = '') => {
+        for (const item of fileItems) {
+          const relativePath = `${projectTitle}${parentFolder}/${item.name}`
+
+          if (item.type === 'file' && item.content) {
+            zip.file(relativePath, item.content)
+          } else if (item.type === 'folder' && item.children) {
+            addFilesToZip(item.children, `${parentFolder}/${item.name}`)
+          }
+        }
+      }
+
+      // Add all files to the zip
+      addFilesToZip(files)
+
+      // Generate the zip file
+      const content = await zip.generateAsync({ type: 'blob' })
+
+      // Create a download link and trigger the download
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${projectTitle}.zip`
+      document.body.appendChild(a)
+      a.click()
+
+      // Clean up
+      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: 'Download started',
+        description: `Your project "${projectTitle}" is being downloaded as a zip file.`,
+      })
+    } catch (error) {
+      console.error('Error downloading files:', error)
+      toast({
+        title: 'Download failed',
+        description:
+          'There was an error creating the download. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Add Netlify deployment functionality
+  const handleNetlifyDeploy = async () => {
+    console.log('Deploy clicked')
+    if (!files.length) {
+      toast({
+        title: 'No files to deploy',
+        description: 'Generate a website first before deploying.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      setIsDeploying(true)
+      const projectTitle = getProjectTitle()
+      const sanitizedTitle =
+        projectTitle.toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'ai-site'
+      console.log('Sanitized Title:', sanitizedTitle)
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+
+      // ✅ Check if /dist exists by trying to read it
+      let entries
+      try {
+        entries = await webcontainer?.fs.readdir('/dist', {
+          withFileTypes: true,
+        })
+      } catch {
+        throw new Error(
+          'No /dist directory found. Please preview the site first.'
+        )
+      }
+
+      if (!entries || entries.length === 0) {
+        throw new Error(
+          'The /dist folder is empty. Something went wrong during the build.'
+        )
+      }
+
+      // ✅ Recursive zip of /dist
+      const walkDistFolder = async (dir = '/dist', base = '') => {
+        const items = await webcontainer?.fs.readdir(dir, {
+          withFileTypes: true,
+        })
+        if (!items) return
+
+        for (const entry of items) {
+          const fullPath = `${dir}/${entry.name}`
+          const relativePath = `${base}${entry.name}`
+
+          if (entry.isFile()) {
+            const fileData = await webcontainer!.fs.readFile(fullPath)
+            if (fileData) {
+              zip.file(relativePath.replace(/^\/?dist\//, ''), fileData)
+            }
+          } else if (entry.isDirectory()) {
+            await walkDistFolder(fullPath, `${relativePath}/`)
+          }
+        }
+      }
+
+      await walkDistFolder('/dist', '')
+      zip.forEach((relativePath) => {
+        console.log('[ZIP]', relativePath)
+      })
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const tempUrl = URL.createObjectURL(zipBlob)
+      const a = document.createElement('a')
+      a.href = tempUrl
+      a.download = 'site.zip'
+      a.click()
+
+      // ✅ Deploy steps
+      const response = await axios.post(
+        `${BACKEND_URL}/deploy-netlify`,
+        {
+          projectTitle,
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+
+      const { siteId } = response.data
+
+      const formData = new FormData()
+      formData.append('file', zipBlob, 'deployed-site.zip')
+      formData.append('siteId', siteId)
+
+      const deployResponse = await axios.post(
+        `${BACKEND_URL}/upload-netlify`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        }
+      )
+
+      const { deployUrl } = deployResponse.data
+      setDeployedUrl(deployUrl)
+
+      toast({
+        title: 'Deployment successful!',
+        description: (
+          <div className='flex flex-col gap-2'>
+            <p>Your site has been deployed to Netlify.</p>
+            <a
+              href={deployUrl}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-blue-500 hover:underline'
+            >
+              {deployUrl}
+            </a>
+          </div>
+        ),
+        duration: 10000,
+      })
+    } catch (error) {
+      console.error('Error deploying to Netlify:', error)
+      toast({
+        title: 'Deployment failed',
+        description:
+          'There was an error deploying to Netlify. Please try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   return (
     <div className='fixed inset-0 flex items-center justify-center p-4'>
       <motion.div
@@ -423,18 +652,70 @@ Description: ${
               <div className='flex-1 flex flex-col overflow-hidden'>
                 <div className='p-4 border-b flex justify-between items-center'>
                   <h1 className='text-xl font-bold'>Website Builder</h1>
-                  {versionHistory.length > 0 && (
-                    <Button
-                      variant='outline'
-                      size='sm'
-                      // Hardcoded to restore the first version - TODO: change this to restore to only last saved version
-                      onClick={() => restoreVersion(versionHistory[0])}
-                      className='flex items-center gap-2'
-                    >
-                      <RotateCcw className='h-4 w-4' />
-                      Undo
-                    </Button>
-                  )}
+                  <div className='flex items-center gap-2'>
+                    {/* Add Deploy Button alongside Download Button */}
+                    {showPreview && (
+                      <>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={handleDownload}
+                          className='flex items-center gap-2'
+                        >
+                          <Download className='h-4 w-4' />
+                          Download
+                        </Button>
+                        {deployedUrl ? (
+                          <a
+                            href={deployedUrl}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='text-blue-500 hover:underline'
+                          >
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              className='flex items-center gap-2'
+                            >
+                              <SquareArrowOutUpRight className='h-4 w-4' />
+                              Visit Site
+                            </Button>
+                          </a>
+                        ) : (
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={handleNetlifyDeploy}
+                            disabled={isDeploying}
+                            className='flex items-center gap-2'
+                          >
+                            {isDeploying ? (
+                              <>
+                                <Loader2 className='h-4 w-4 animate-spin' />
+                                Deploying...
+                              </>
+                            ) : (
+                              <>
+                                <Globe className='h-4 w-4' />
+                                Deploy to Netlify
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {versionHistory.length > 0 && (
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        onClick={() => restoreVersion(versionHistory[0])}
+                        className='flex items-center gap-2'
+                      >
+                        <RotateCcw className='h-4 w-4' />
+                        Undo
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {/* Chat Messages - Currently not wrapping the messages in a scroll area */}
                 <ScrollArea className='flex-1'>

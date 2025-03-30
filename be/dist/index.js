@@ -14,10 +14,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require('dotenv').config();
 const express_1 = __importDefault(require("express"));
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const os_1 = __importDefault(require("os"));
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const prompts_1 = require("./prompts");
 const react_1 = require("./defaults/react");
 const node_1 = require("./defaults/node");
+const netlify_1 = require("./netlify");
 console.log('Environment variables loaded');
 console.log(`Claude key: ${process.env.ANTHROPIC_API_KEY}`);
 const cors_1 = __importDefault(require("cors"));
@@ -26,6 +30,11 @@ const anthropic = new sdk_1.default();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Configure multer for file uploads
+const upload = (0, multer_1.default)({
+    dest: path_1.default.join(os_1.default.tmpdir(), 'netlify-uploads'),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
 app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const prompt = req.body.prompt;
     const response = yield anthropic.messages.create({
@@ -88,6 +97,11 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         formattedResponse: formattedResponse,
     });
 }));
+// Add Netlify deployment routes
+app.post('/deploy-netlify', netlify_1.createNetlifySite);
+app.post('/upload-netlify', upload.single('file'), (req, res) => {
+    (0, netlify_1.uploadToNetlify)(req, res);
+});
 app.listen(3000);
 // async function main() {
 //     anthropic.messages.stream({

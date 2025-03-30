@@ -8,6 +8,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __asyncValues = (this && this.__asyncValues) || function (o) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var m = o[Symbol.asyncIterator], i;
+    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -18,12 +25,21 @@ const genai_1 = require("@google/genai");
 const prompts_1 = require("./prompts");
 const react_1 = require("./defaults/react");
 const node_1 = require("./defaults/node");
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const os_1 = __importDefault(require("os"));
+const netlify_1 = require("./netlify");
 console.log('Environment variables loaded');
 const cors_1 = __importDefault(require("cors"));
 const ai = new genai_1.GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Configure multer for file uploads
+const upload = (0, multer_1.default)({
+    dest: path_1.default.join(os_1.default.tmpdir(), 'netlify-uploads'),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
 app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const prompt = req.body.prompt;
     try {
@@ -56,7 +72,7 @@ app.post('/template', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 }));
 app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, e_1, _b, _c;
     const messages = req.body.messages;
     try {
         const formattedMessages = Array.isArray(messages)
@@ -65,37 +81,49 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 parts: [{ text: msg.content }],
             }))
             : [{ role: 'user', parts: [{ text: JSON.stringify(messages) }] }];
-        const codeResponse = yield ai.models.generateContent({
+        const codeResponse = yield ai.models.generateContentStream({
             model: 'gemini-2.5-pro-exp-03-25',
             contents: formattedMessages,
             config: {
                 systemInstruction: (0, prompts_1.getSystemPrompt)(),
             },
         });
-        const responseText = (_a = codeResponse === null || codeResponse === void 0 ? void 0 : codeResponse.text) !== null && _a !== void 0 ? _a : 'No response from model';
+        let responseText = '';
+        try {
+            for (var _d = true, codeResponse_1 = __asyncValues(codeResponse), codeResponse_1_1; codeResponse_1_1 = yield codeResponse_1.next(), _a = codeResponse_1_1.done, !_a; _d = true) {
+                _c = codeResponse_1_1.value;
+                _d = false;
+                const chunk = _c;
+                if (chunk.text) {
+                    responseText += chunk.text;
+                    console.log(chunk.text); // Optional: stream to client or console
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (!_d && !_a && (_b = codeResponse_1.return)) yield _b.call(codeResponse_1);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
         let rawText = responseText;
-        console.log('rawText::', rawText);
+        // console.log('rawText::', rawText)
         // Extract the title from the response using improved regex
         const titleMatch = rawText.match(/<tewenArtifact[^>]*title="([^"]*)"/);
         const title = titleMatch ? titleMatch[1] : null;
         console.log('title::', title);
         // Extract the first full sentence from the description
         let description = '';
-        const firstTagIndex = rawText.indexOf('<tewen');
+        const firstTagIndex = rawText.indexOf('<tewenArtifact');
         if (firstTagIndex > 0) {
-            const initialText = rawText.substring(0, firstTagIndex).trim();
-            // Find the first sentence (ending with period, question mark, or exclamation point)
-            const sentenceMatch = initialText.match(/^(.*?[.!?])\s/);
-            description = sentenceMatch ? sentenceMatch[1] : initialText;
+            // Get all text before the first tag, not just the first sentence
+            description = rawText.substring(0, firstTagIndex).trim();
         }
         console.log('description::', description);
         // Extract the steps from the response using improved regex
         const stepsMatch = rawText.match(/<tewenAction\s+type="([^"]*)"(?:\s+filePath="([^"]*)")?>([\s\S]*?)<\/tewenAction>/g);
-        console.log('stepsMatch::', stepsMatch);
-        // let match
-        // while ((match = stepsMatch.exec(rawText)) !== null) {
-        //   console.log('match::', match)
-        // }
+        // console.log('stepsMatch::', stepsMatch)
         // Format the response for the frontend
         const formattedResponse = {
             title: title,
@@ -114,4 +142,9 @@ app.post('/chat', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
     }
 }));
+// Add Netlify deployment routes
+app.post('/deploy-netlify', netlify_1.createNetlifySite);
+app.post('/upload-netlify', upload.single('file'), (req, res) => {
+    (0, netlify_1.uploadToNetlify)(req, res);
+});
 app.listen(3000);

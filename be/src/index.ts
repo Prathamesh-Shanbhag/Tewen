@@ -1,11 +1,15 @@
 require('dotenv').config()
-import express from 'express'
+import express, { Request } from 'express'
+import multer from 'multer'
+import path from 'path'
+import os from 'os'
 
 import Anthropic from '@anthropic-ai/sdk'
 import { BASE_PROMPT, getSystemPrompt } from './prompts'
 import { TextBlock } from '@anthropic-ai/sdk/resources'
 import { basePrompt as reactBasePrompt } from './defaults/react'
 import { basePrompt as nodeBasePrompt } from './defaults/node'
+import { createNetlifySite, uploadToNetlify } from './netlify'
 console.log('Environment variables loaded')
 console.log(`Claude key: ${process.env.ANTHROPIC_API_KEY}`)
 import cors from 'cors'
@@ -16,6 +20,13 @@ const anthropic = new Anthropic()
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: path.join(os.tmpdir(), 'netlify-uploads'),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+})
+
 app.post('/template', async (req, res) => {
   const prompt = req.body.prompt
   const response = await anthropic.messages.create({
@@ -86,6 +97,12 @@ app.post('/chat', async (req, res) => {
     // response: rawText,
     formattedResponse: formattedResponse,
   })
+})
+
+// Add Netlify deployment routes
+app.post('/deploy-netlify', createNetlifySite)
+app.post('/upload-netlify', upload.single('file'), (req, res) => {
+  uploadToNetlify(req as Request & { file?: Express.Multer.File }, res)
 })
 
 app.listen(3000)

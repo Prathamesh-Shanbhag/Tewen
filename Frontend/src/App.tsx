@@ -21,7 +21,6 @@ function App() {
           <Route path='/' element={<Layout />}>
             <Route index element={<Home />} />
             <Route path='editor' element={<EditorPage />} />
-            {/* <Route path='builder' element={<Builder />} /> */}
           </Route>
         </Routes>
       </AnimatePresence>

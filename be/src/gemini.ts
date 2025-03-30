@@ -1,10 +1,13 @@
 require('dotenv').config()
-import express, { response } from 'express'
-
+import express, { Request } from 'express'
 import { GoogleGenAI } from '@google/genai'
 import { BASE_PROMPT, getSystemPrompt } from './prompts'
 import { basePrompt as reactBasePrompt } from './defaults/react'
 import { basePrompt as nodeBasePrompt } from './defaults/node'
+import multer from 'multer'
+import path from 'path'
+import os from 'os'
+import { createNetlifySite, uploadToNetlify } from './netlify'
 
 console.log('Environment variables loaded')
 import cors from 'cors'
@@ -14,6 +17,12 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: path.join(os.tmpdir(), 'netlify-uploads'),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+})
 
 app.post('/template', async (req, res) => {
   const prompt = req.body.prompt
@@ -58,17 +67,24 @@ app.post('/chat', async (req, res) => {
         }))
       : [{ role: 'user', parts: [{ text: JSON.stringify(messages) }] }]
 
-    const codeResponse = await ai.models.generateContent({
+    const codeResponse = await ai.models.generateContentStream({
       model: 'gemini-2.5-pro-exp-03-25',
       contents: formattedMessages,
       config: {
         systemInstruction: getSystemPrompt(),
       },
     })
-    const responseText = codeResponse?.text ?? 'No response from model'
+
+    let responseText = ''
+    for await (const chunk of codeResponse) {
+      if (chunk.text) {
+        responseText += chunk.text
+        console.log(chunk.text) // Optional: stream to client or console
+      }
+    }
 
     let rawText = responseText
-    console.log('rawText::', rawText)
+    // console.log('rawText::', rawText)
     // Extract the title from the response using improved regex
     const titleMatch = rawText.match(/<tewenArtifact[^>]*title="([^"]*)"/)
     const title = titleMatch ? titleMatch[1] : null
@@ -76,12 +92,10 @@ app.post('/chat', async (req, res) => {
 
     // Extract the first full sentence from the description
     let description = ''
-    const firstTagIndex = rawText.indexOf('<tewen')
+    const firstTagIndex = rawText.indexOf('<tewenArtifact')
     if (firstTagIndex > 0) {
-      const initialText = rawText.substring(0, firstTagIndex).trim()
-      // Find the first sentence (ending with period, question mark, or exclamation point)
-      const sentenceMatch = initialText.match(/^(.*?[.!?])\s/)
-      description = sentenceMatch ? sentenceMatch[1] : initialText
+      // Get all text before the first tag, not just the first sentence
+      description = rawText.substring(0, firstTagIndex).trim()
     }
     console.log('description::', description)
 
@@ -89,7 +103,7 @@ app.post('/chat', async (req, res) => {
     const stepsMatch = rawText.match(
       /<tewenAction\s+type="([^"]*)"(?:\s+filePath="([^"]*)")?>([\s\S]*?)<\/tewenAction>/g
     )
-    console.log('stepsMatch::', stepsMatch)
+    // console.log('stepsMatch::', stepsMatch)
 
     // Format the response for the frontend
     const formattedResponse = {
@@ -108,6 +122,12 @@ app.post('/chat', async (req, res) => {
       details: error.message || String(error),
     })
   }
+})
+
+// Add Netlify deployment routes
+app.post('/deploy-netlify', createNetlifySite)
+app.post('/upload-netlify', upload.single('file'), (req, res) => {
+  uploadToNetlify(req as Request & { file?: Express.Multer.File }, res)
 })
 
 app.listen(3000)

@@ -65,10 +65,24 @@ export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
       )
 
       // Listen for server-ready event
-      webContainer.on('server-ready', (port, serverUrl) => {
+      webContainer.on('server-ready', async (port, serverUrl) => {
         console.log('Server ready on port:', port, 'URL:', serverUrl)
         setUrl(serverUrl)
         setIsLoading(false)
+        // Deploy Functionality
+        console.log('Running npm run build in background...')
+        const buildProcess = await webContainer.spawn('npm', ['run', 'build'])
+        buildProcess.output.pipeTo(
+          new WritableStream({
+            write(data) {
+              console.log('[Build]', data)
+            },
+          })
+        )
+        const buildExit = await buildProcess.exit
+        if (buildExit !== 0)
+          console.warn('Build failed (but preview still works)')
+        else console.log('Build completed and /dist is ready.')
       })
     } catch (err) {
       console.error('Error starting dev server:', err)
