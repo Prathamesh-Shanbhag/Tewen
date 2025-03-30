@@ -14,7 +14,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadToNetlify = exports.createNetlifySite = void 0;
 const axios_1 = __importDefault(require("axios"));
-const form_data_1 = __importDefault(require("form-data"));
 const fs_1 = __importDefault(require("fs"));
 const adm_zip_1 = __importDefault(require("adm-zip"));
 // Get the Netlify access token from environment variables
@@ -29,7 +28,7 @@ const createNetlifySite = (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
         // Create a new site on Netlify
         const response = yield axios_1.default.post('https://api.netlify.com/api/v1/sites', {
-            name: `${projectTitle}-${Date.now()}`,
+            name: `${projectTitle}`,
         }, {
             headers: {
                 Authorization: `Bearer ${NETLIFY_ACCESS_TOKEN}`,
@@ -57,26 +56,28 @@ const uploadToNetlify = (req, res) => __awaiter(void 0, void 0, void 0, function
             return;
         }
         const { siteId } = req.body;
+        // 🔍 Inspect ZIP file contents
         const zip = new adm_zip_1.default(req.file.path);
         console.log('[Server ZIP entries]');
         zip.getEntries().forEach((entry) => {
             console.log(' -', entry.entryName);
         });
-        // Create a FormData object to upload the file
-        const formData = new form_data_1.default();
-        formData.append('file', fs_1.default.createReadStream(req.file.path), {
-            filename: 'site.zip',
-            contentType: 'application/zip',
-        });
+        // 🔍 Log file size
         const stats = fs_1.default.statSync(req.file.path);
         console.log('Uploading ZIP:', req.file.path, 'Size:', stats.size);
-        // Deploy the site by uploading the zip file and setting production to true
-        const response = yield axios_1.default.post(`https://api.netlify.com/api/v1/sites/${siteId}/deploys?production=true`, formData, {
-            headers: Object.assign({ Authorization: `Bearer ${NETLIFY_ACCESS_TOKEN}` }, formData.getHeaders()),
+        //  Read ZIP file as raw buffer
+        const zipBuffer = fs_1.default.readFileSync(req.file.path);
+        // Upload as raw binary with correct Content-Type
+        const response = yield axios_1.default.post(`https://api.netlify.com/api/v1/sites/${siteId}/deploys`, zipBuffer, {
+            headers: {
+                Authorization: `Bearer ${NETLIFY_ACCESS_TOKEN}`,
+                'Content-Type': 'application/zip',
+            },
+            maxBodyLength: Infinity, // ensure large zips don't get cut off
         });
-        // Clean up the temporary file
+        //  Clean up
         fs_1.default.unlinkSync(req.file.path);
-        // Return the deployed URL
+        // Success
         res.status(200).json({
             deployUrl: response.data.deploy_ssl_url,
             deployId: response.data.id,
@@ -84,7 +85,7 @@ const uploadToNetlify = (req, res) => __awaiter(void 0, void 0, void 0, function
     }
     catch (error) {
         console.error('Error deploying to Netlify:', error);
-        // Clean up the temporary file if it exists
+        // Clean up if needed
         if (req.file && req.file.path) {
             try {
                 fs_1.default.unlinkSync(req.file.path);

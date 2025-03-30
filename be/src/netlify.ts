@@ -24,7 +24,7 @@ export const createNetlifySite = async (
     const response = await axios.post(
       'https://api.netlify.com/api/v1/sites',
       {
-        name: `${projectTitle}-${Date.now()}`,
+        name: `${projectTitle}`,
       },
       {
         headers: {
@@ -59,36 +59,38 @@ export const uploadToNetlify = async (
     }
 
     const { siteId } = req.body
+
+    // 🔍 Inspect ZIP file contents
     const zip = new AdmZip(req.file.path)
     console.log('[Server ZIP entries]')
     zip.getEntries().forEach((entry) => {
       console.log(' -', entry.entryName)
     })
-    // Create a FormData object to upload the file
-    const formData = new FormData()
-    formData.append('file', fs.createReadStream(req.file.path), {
-      filename: 'site.zip',
-      contentType: 'application/zip',
-    })
+
+    // 🔍 Log file size
     const stats = fs.statSync(req.file.path)
     console.log('Uploading ZIP:', req.file.path, 'Size:', stats.size)
 
-    // Deploy the site by uploading the zip file and setting production to true
+    //  Read ZIP file as raw buffer
+    const zipBuffer = fs.readFileSync(req.file.path)
+
+    // Upload as raw binary with correct Content-Type
     const response = await axios.post(
-      `https://api.netlify.com/api/v1/sites/${siteId}/deploys?production=true`,
-      formData,
+      `https://api.netlify.com/api/v1/sites/${siteId}/deploys`,
+      zipBuffer,
       {
         headers: {
           Authorization: `Bearer ${NETLIFY_ACCESS_TOKEN}`,
-          ...formData.getHeaders(),
+          'Content-Type': 'application/zip',
         },
+        maxBodyLength: Infinity, // ensure large zips don't get cut off
       }
     )
 
-    // Clean up the temporary file
+    //  Clean up
     fs.unlinkSync(req.file.path)
 
-    // Return the deployed URL
+    // Success
     res.status(200).json({
       deployUrl: response.data.deploy_ssl_url,
       deployId: response.data.id,
@@ -96,7 +98,7 @@ export const uploadToNetlify = async (
   } catch (error) {
     console.error('Error deploying to Netlify:', error)
 
-    // Clean up the temporary file if it exists
+    // Clean up if needed
     if (req.file && req.file.path) {
       try {
         fs.unlinkSync(req.file.path)

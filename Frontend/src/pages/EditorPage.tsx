@@ -556,6 +556,7 @@ Description: ${
       zip.forEach((relativePath) => {
         console.log('[ZIP]', relativePath)
       })
+      zip.file('_redirects', '/*    /index.html   200')
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const tempUrl = URL.createObjectURL(zipBlob)
