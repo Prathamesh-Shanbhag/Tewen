@@ -1,0 +1,114 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        default: ''
+      releaseNotes:
+        description: 'Release notes'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Create Release ZIP
+        run: |
+          mkdir -p release
+          cp -r frontend/dist release/
+          cp -r be release/
+          cd release
+          zip -r ../tewen-release.zip .
+          cd ..
+
+      - name: Extract tag name
+        id: tag_name
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "::set-output name=version::${{ github.event.inputs.version }}"
+          else
+            echo "::set-output name=version::${GITHUB_REF#refs/tags/}"
+          fi
+
+      - name: Generate Release Notes
+        id: generate_notes
+        run: |
+          if [ "${{ github.event.inputs.releaseNotes }}" != "" ]; then
+            echo "${{ github.event.inputs.releaseNotes }}" > RELEASE_NOTES.md
+          else
+            # Extract changes since the previous release
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ steps.tag_name.outputs.version }}^ 2>/dev/null || echo "")
+            
+            if [ "$PREVIOUS_TAG" == "" ]; then
+              echo "## 🚀 Initial Release" > RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              echo "Initial release of Tewen: A Prompt-Based AI Website Generator" >> RELEASE_NOTES.md
+            else
+              echo "## 🚀 Release ${{ steps.tag_name.outputs.version }}" > RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              echo "### Changes since $PREVIOUS_TAG" >> RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              
+              # Features
+              echo "### ✨ New Features" >> RELEASE_NOTES.md
+              git log $PREVIOUS_TAG..${{ steps.tag_name.outputs.version }} --pretty=format:"- %s" | grep -i -E '(feat|feature)' >> RELEASE_NOTES.md || echo "- No new features" >> RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              
+              # Bug fixes
+              echo "### 🐛 Bug Fixes" >> RELEASE_NOTES.md
+              git log $PREVIOUS_TAG..${{ steps.tag_name.outputs.version }} --pretty=format:"- %s" | grep -i -E '(fix|bug|issue)' >> RELEASE_NOTES.md || echo "- No bug fixes" >> RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              
+              # Improvements
+              echo "### 🔨 Improvements" >> RELEASE_NOTES.md
+              git log $PREVIOUS_TAG..${{ steps.tag_name.outputs.version }} --pretty=format:"- %s" | grep -i -E '(improve|refactor|perf|performance)' >> RELEASE_NOTES.md || echo "- No improvements" >> RELEASE_NOTES.md
+              echo "" >> RELEASE_NOTES.md
+              
+              # Documentation
+              echo "### 📚 Documentation" >> RELEASE_NOTES.md
+              git log $PREVIOUS_TAG..${{ steps.tag_name.outputs.version }} --pretty=format:"- %s" | grep -i -E '(doc|docs|documentation)' >> RELEASE_NOTES.md || echo "- No documentation changes" >> RELEASE_NOTES.md
+            fi
+          fi
+
+          echo "::set-output name=notes::$(cat RELEASE_NOTES.md)"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag_name.outputs.version }}
+          release_name: Release ${{ steps.tag_name.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./tewen-release.zip
+          asset_name: tewen-${{ steps.tag_name.outputs.version }}.zip
+          asset_content_type: application/zip

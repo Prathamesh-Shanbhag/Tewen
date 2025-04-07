@@ -62,6 +62,54 @@ Tewen implements several innovative technical approaches:
 - **Artifact Generation**: Creates comprehensive artifacts including files and shell commands
 - **Multi-Provider Architecture**: Modular system supporting different AI providers with consistent output format
 
+## Automated Workflows
+
+Tewen uses GitHub Actions for automation of several key development workflows:
+
+### Changelog Generation
+
+The project automatically generates and maintains a changelog based on commit messages using the [Conventional Commits](https://www.conventionalcommits.org/) format. The workflow:
+
+- Runs on pushes to main branch, merged PRs, or manual triggers
+- Analyzes commit messages since the last tag
+- Categorizes changes (features, fixes, etc.)
+- Updates the CHANGELOG.md file
+- Commits and pushes the changes
+
+To manually trigger changelog generation:
+
+1. Go to the GitHub repository
+2. Navigate to Actions → Generate Changelog
+3. Click "Run workflow"
+4. Optionally specify a version
+
+### Versioning
+
+Version management is automated through GitHub Actions:
+
+- Supports semantic versioning (major.minor.patch)
+- Automatically updates version numbers in all relevant files
+- Creates git tags for each version
+- Can be triggered manually with specified version bump type
+
+To update the version:
+
+1. Go to the GitHub repository
+2. Navigate to Actions → Update Version
+3. Click "Run workflow"
+4. Select version bump type (major, minor, patch)
+
+### Release Creation
+
+The project automates the creation of GitHub Releases:
+
+- Triggered automatically when a new version tag is pushed
+- Builds the frontend for production
+- Packages the application into a downloadable ZIP
+- Generates formatted release notes from commit messages
+- Creates a GitHub Release with the package attached
+- Can be triggered manually for custom releases
+
 ## Visual Documentation
 
 This repository includes visual documentation to explain the system architecture, workflows, and component interactions. These diagrams are designed to provide a clear understanding of how Tewen functions.
