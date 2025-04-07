@@ -35,8 +35,6 @@ jobs:
       - name: Install dependencies
         run: |
           npm install -g conventional-changelog-cli
-          npm install -g @anthropic-ai/sdk
-          npm install -g openai
           npm install -g @google/generative-ai
 
       - name: Determine version
@@ -78,18 +76,28 @@ jobs:
         id: diff_summary
         run: |
           # Get the last tag or use a default
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           # Generate a detailed diff summary
-          echo "Generating diff summary from $LAST_TAG to HEAD"
+          echo "Generating diff summary"
 
           # Create a temporary file for the diff
           DIFF_FILE=$(mktemp)
-          git diff $LAST_TAG..HEAD > $DIFF_FILE
+
+          # Handle the case when there are no tags yet
+          if [ -z "$LAST_TAG" ]; then
+            echo "No tags found, using all commits"
+            git diff --stat > $DIFF_FILE
+            git log --pretty=format:"%h - %s (%an)" > $COMMIT_FILE
+          else
+            echo "Using diff from $LAST_TAG to HEAD"
+            git diff --stat $LAST_TAG..HEAD > $DIFF_FILE
+            git log $LAST_TAG..HEAD --pretty=format:"%h - %s (%an)" > $COMMIT_FILE
+          fi
 
           # Create a temporary file for commit messages
           COMMIT_FILE=$(mktemp)
-          git log $LAST_TAG..HEAD --pretty=format:"%h - %s (%an)" > $COMMIT_FILE
+          git log --pretty=format:"%h - %s (%an)" > $COMMIT_FILE
 
           # Create a temporary file for the AI prompt
           PROMPT_FILE=$(mktemp)
@@ -116,79 +124,14 @@ jobs:
           $(cat $COMMIT_FILE)
 
           DIFF SUMMARY:
-          $(git diff --stat $LAST_TAG..HEAD)
+          $(cat $DIFF_FILE)
 
           DIFF DETAILS:
-          $(cat $DIFF_FILE | head -n 1000)
+          $(git diff | head -n 1000)
           EOF
 
-          # Use Claude API to analyze the diff and generate a changelog entry
-          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
-            echo "Using Claude API for changelog generation"
-            CHANGELOG_JSON=$(node -e "
-              const { Anthropic } = require('@anthropic-ai/sdk');
-              const fs = require('fs');
-              const prompt = fs.readFileSync('$PROMPT_FILE', 'utf8');
-              
-              async function generateChangelog() {
-                const anthropic = new Anthropic({
-                  apiKey: '${{ secrets.ANTHROPIC_API_KEY }}'
-                });
-                
-                const message = await anthropic.messages.create({
-                  model: 'claude-3-5-sonnet-20241022',
-                  max_tokens: 4000,
-                  messages: [
-                    {
-                      role: 'user',
-                      content: prompt
-                    }
-                  ]
-                });
-                
-                // Extract JSON from the response
-                const response = message.content[0].text;
-                const jsonMatch = response.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                  console.log(jsonMatch[0]);
-                } else {
-                  console.log('{}');
-                }
-              }
-              
-              generateChangelog().catch(console.error);
-            ")
-          # Fallback to OpenAI if Claude is not available
-          elif [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
-            echo "Using OpenAI API for changelog generation"
-            CHANGELOG_JSON=$(node -e "
-              const OpenAI = require('openai');
-              const fs = require('fs');
-              const prompt = fs.readFileSync('$PROMPT_FILE', 'utf8');
-              
-              async function generateChangelog() {
-                const openai = new OpenAI({
-                  apiKey: '${{ secrets.OPENAI_API_KEY }}'
-                });
-                
-                const response = await openai.chat.completions.create({
-                  model: 'gpt-4o',
-                  messages: [
-                    {
-                      role: 'user',
-                      content: prompt
-                    }
-                  ],
-                  response_format: { type: 'json_object' }
-                });
-                
-                console.log(response.choices[0].message.content);
-              }
-              
-              generateChangelog().catch(console.error);
-            ")
-          # Fallback to Gemini if neither Claude nor OpenAI is available
-          elif [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+          # Use Gemini API to analyze the diff and generate a changelog entry
+          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
             echo "Using Gemini API for changelog generation"
             CHANGELOG_JSON=$(node -e "
               const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -214,7 +157,7 @@ jobs:
               generateChangelog().catch(console.error);
             ")
           else
-            echo "No AI API keys available, falling back to conventional-changelog"
+            echo "No Gemini API key available, falling back to conventional-changelog"
             CHANGELOG_JSON="{}"
           fi
 
