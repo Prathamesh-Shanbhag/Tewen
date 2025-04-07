@@ -15,8 +15,8 @@ import {
   Code2,
   Eye,
   Download,
-  Globe,
   SquareArrowOutUpRight,
+  Rocket,
 } from 'lucide-react'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
@@ -512,7 +512,7 @@ Description: ${
       const JSZip = (await import('jszip')).default
       const zip = new JSZip()
 
-      // ✅ Check if /dist exists by trying to read it
+      //  Check if /dist exists by trying to read it
       let entries
       try {
         entries = await webcontainer?.fs.readdir('/dist', {
@@ -562,10 +562,10 @@ Description: ${
       const tempUrl = URL.createObjectURL(zipBlob)
       const a = document.createElement('a')
       a.href = tempUrl
-      a.download = 'site.zip'
+      a.download = `${projectTitle}.zip`
       a.click()
 
-      // ✅ Deploy steps
+      // Deploy steps
       const response = await axios.post(
         `${BACKEND_URL}/deploy-netlify`,
         {
@@ -624,7 +624,10 @@ Description: ${
   }
 
   return (
-    <div className='fixed inset-0 flex items-center justify-center p-4'>
+    <div
+      className='fixed inset-0 flex items-center justify-center p-4 '
+      // style={{ backgroundSize: '200% 200%' bg-gradient-to-br from-purple-500 from-10% via-gray-500 to-black dark:from-purple-500 dark:via-gray-500 dark:to-black animate-gradient-slow}}
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -652,7 +655,7 @@ Description: ${
               {/* Chat Section */}
               <div className='flex-1 flex flex-col overflow-hidden'>
                 <div className='p-4 border-b flex justify-between items-center'>
-                  <h1 className='text-xl font-bold'>Website Builder</h1>
+                  <h1 className='text-xl font-bold'>Workspace</h1>
                   <div className='flex items-center gap-2'>
                     {/* Add Deploy Button alongside Download Button */}
                     {showPreview && (
@@ -697,8 +700,8 @@ Description: ${
                               </>
                             ) : (
                               <>
-                                <Globe className='h-4 w-4' />
-                                Deploy to Netlify
+                                <Rocket className='h-4 w-4' />
+                                Deploy
                               </>
                             )}
                           </Button>
